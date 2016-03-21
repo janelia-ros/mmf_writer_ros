@@ -1,0 +1,10 @@
+bool recording
+string fileName
+string path
+duration recordingTime
+duration elapsedRecording
+uint32 buffer
+uint32 frameNumber
+uint32 frameRate
+uint32 xSize
+uint32 ySize

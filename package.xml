@@ -1,0 +1,37 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>mmf_writer</name>
+  <version>0.0.0</version>
+  <description>The mmf_writer package</description>
+
+  <maintainer email="bafonso@gmail.com">Bruno Afonso</maintainer>
+
+  <license>BSD</license>
+
+  <url type="website">https://github.com/janelia-ros/mmf_writer_ros</url>
+  <url type="bugtracker">https://github.com/janelia-ros/mmf_writer_ros/issues</url>
+  <url type="repository">https://github.com/janelia-ros/mmf_writer_ros</url>
+
+  <author email="bafonso@gmail.com">Bruno Afonso</author>
+
+  <buildtool_depend version_gte="0.5.68">catkin</buildtool_depend>
+  <build_depend>boost</build_depend>
+  <build_depend>message_generation</build_depend>
+  <depend>image_transport</depend>
+ 
+  <depend>message_runtime</depend>
+  <depend>cv_bridge</depend>
+  <depend>dynamic_reconfigure</depend>
+  <depend>image_geometry</depend>
+  <depend>libopencv-dev</depend>
+  <depend>nodelet</depend>
+  <depend>roscpp</depend>
+  <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <!-- <test_depend>rostest</test_depend> -->
+  <!-- <test_depend>camera_calibration_parsers</test_depend> -->
+
+  <export>
+    <nodelet plugin="${prefix}/nodelet_plugins.xml" />
+  </export>
+</package>
