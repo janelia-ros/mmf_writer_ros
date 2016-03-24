@@ -1,3 +1,6 @@
+//#ifndef MMF_WRITER_NODELET
+//#define MMF_WRITER_NODELET
+
 #include <boost/version.hpp>
 #if ((BOOST_VERSION / 100) % 1000) >= 53
 #include <boost/thread/lock_guard.hpp>
@@ -17,10 +20,8 @@
 #include <ros/console.h>
 
 #include "std_msgs/Empty.h"
+# include <std_srvs/Empty.h>
 
-#include "mmf_writer/Ellipse.h"
-#include "mmf_writer/Blob.h"
-#include "mmf_writer/Blobs.h"
 #include "mmf_writer/RecordingStatus.h"
 #include "mmf_writer/mmfWriter.h"
 #include <opencv2/highgui/highgui.hpp>
@@ -31,28 +32,40 @@
 
 #include "mmf_writer/mmfWriter.h"
 #include "mmf_writer/NameValueMetaData.h"
-//#include "mmf_writer/ThreadedLinearStackCompressor.h"
+#include <wfov_camera_msgs/WFOVImage.h>
+
+#include <actionlib/server/simple_action_server.h>
+#include <mmf_writer/RecordAction.h>
+#include <mmf_writer/RecordingActionServer.h>
 
 static const std::string OPENCV_WINDOW = "Image window";
 
-
 namespace mmf_writer {
+
 
 class ProcessCameraFrame : public nodelet::Nodelet
 {
 public:
 	// ROS communication
 	boost::shared_ptr<image_transport::ImageTransport> it_in_,it_out_;
-	image_transport::CameraSubscriber cam_sub_;
+
+	image_transport::CameraSubscriber cam_sub_ ; //, cam_wfov_sub_;
+	ros::Subscriber cam_wfov_sub_;
+
+	RecordingActionServer * actionServer ;
+
 	int queue_size_;
 
 	boost::mutex connect_mutex_;
-	image_transport::CameraPublisher image_pub_;
 
-	ros::Publisher blobs_pub_;
+	ros::Publisher recordingStatus_pub_;
+	ros::ServiceServer refreshParam_srv_;
+
+	bool refreshParamCallback(std_srvs::Empty::Request&, std_srvs::Empty::Response&);
+
 
 	// background image
-	ros::Subscriber recording_sub_;
+	ros::Subscriber recording_sub_, start_sub_, stop_sub_;
 	std::string background_image_path_;
 	cv::Mat image_background_;
 	bool save_background_image_;
@@ -73,17 +86,29 @@ public:
 	void imageCb(const sensor_msgs::ImageConstPtr& image_msg,
 			const sensor_msgs::CameraInfoConstPtr& info_msg);
 
+	void imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& wfovImg) ;
+
 	void configCb(Config &config,uint32_t level);
 
 	void saveBackgroundImageCb(const std_msgs::Empty::ConstPtr& msg);
 	void recordingCb(const std_msgs::Bool& inputMsg);
+//	void startRecordingCb(const std_msgs::Bool& inputMsg);
+//	void stopRecordingCb(const std_msgs::Bool& inputMsg);
+	void startRecordingCb(const std_msgs::EmptyConstPtr msg);
+	void stopRecordingCb(const std_msgs::EmptyConstPtr msg);
+
+
 private:
+
+    // Action servers
+//    recordServer yep ;
 
 	// variables
 	bool recording_ , firstFrame_, instantiated_;
 	int framesRecorded_, framesToRecord_, keyframeInterval_ ;
 	int secondsToRecord_, secondsRecorded_ ;
 
+	int bufnum_ ;
 	std::string fname_, path_ ;
 	ThreadedLinearStackCompressor lsc;
 	int prevFrameSeq_;
@@ -99,12 +124,12 @@ private:
 	};
 
 
-
-PLUGINLIB_EXPORT_CLASS( mmf_writer::ProcessCameraFrame,nodelet::Nodelet)
+//PLUGINLIB_EXPORT_CLASS( mmf_writer::ProcessCameraFrame,nodelet::Nodelet)
 
 }
 
 
+//#endif
 
 
 

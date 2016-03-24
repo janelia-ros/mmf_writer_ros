@@ -14,7 +14,10 @@ find_package(catkin REQUIRED
   nodelet
   roscpp
   std_msgs
-  sensor_msgs)
+  sensor_msgs
+  genmsg
+  actionlib_msgs
+  actionlib)
 find_package(OpenCV REQUIRED)
 if (OpenCV_VERSION VERSION_EQUAL "3")
   add_definitions("-DOPENCV3=1")
@@ -26,15 +29,20 @@ generate_dynamic_reconfigure_options(cfg/ProcessImage.cfg)
 
 add_message_files(
   FILES
-  Ellipse.msg
-  Blob.msg
-  Blobs.msg
   RecordingStatus.msg
+  RecorderSettings.msg
+)
+
+add_action_files(
+	DIRECTORY action 
+	FILES
+	Record.action
 )
 
 generate_messages(
   DEPENDENCIES
   std_msgs
+  actionlib_msgs
 )
 
 catkin_package(
@@ -66,7 +74,7 @@ add_library(${PROJECT_NAME}
   src/libmmf_writer/StaticBackgroundCompressorLoader.cpp
   src/libmmf_writer/ThreadedStaticBackgroundCompressor.cpp
   src/libmmf_writer/ThreadedLinearStackCompressor.cpp
-  
+  src/libmmf_writer/RecordingActionServer.cpp
 )
 
 # make sure configure headers are built before any node using them

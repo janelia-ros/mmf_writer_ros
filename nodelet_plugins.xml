@@ -1,5 +1,13 @@
 <library path="lib/libmmf_writer">
 
+  <class name="mmf_writer/mmf_writer_nodelet"
+	 type="mmf_writer::ProcessCameraFrame"
+	 base_class_type="nodelet::Nodelet">
+    <description>
+      Nodelet to process camera frames going into the MMF writer
+    </description>
+  </class>
+
   <class name="mmf_writer/process_image"
 	 type="mmf_writer::ProcessImageNodelet"
 	 base_class_type="nodelet::Nodelet">
@@ -8,12 +16,5 @@
     </description>
   </class>
 
-  <class name="mmf_writer/mmfWriter_nodelet"
-	 type="mmf_writer::ProcessCameraFrame"
-	 base_class_type="nodelet::Nodelet">
-    <description>
-      Nodelet to process camera frames going into the MMF writer
-    </description>
-  </class>
 
 </library>

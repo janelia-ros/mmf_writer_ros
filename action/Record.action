@@ -1,0 +1,8 @@
+# Define the goal
+RecorderSettings recorder_settings
+---
+# Define the result
+RecordingStatus recorder_result
+---
+# Define a feedback message
+RecordingStatus recording_feedback

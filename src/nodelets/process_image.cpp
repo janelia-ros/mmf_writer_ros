@@ -131,6 +131,11 @@ void ProcessImageNodelet::imageCb(const sensor_msgs::ImageConstPtr& image_msg,
   // get a cv::Mat view of the source data
   cv_bridge::CvImageConstPtr source_ptr = cv_bridge::toCvShare(image_msg,sensor_msgs::image_encodings::MONO8);
 
+	int headerFrameNum = source_ptr->header.seq;
+	std::ostringstream is;
+	is << "header.seq is: " << source_ptr->header.seq ;
+	ROS_INFO(is.str().c_str());
+
   // save background image if necessary
   if (save_background_image_)
   {
