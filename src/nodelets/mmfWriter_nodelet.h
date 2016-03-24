@@ -54,6 +54,9 @@ public:
 
 	RecordingActionServer * actionServer ;
 
+	// action server stuff
+	void goalCB() ;
+
 	int queue_size_;
 
 	boost::mutex connect_mutex_;

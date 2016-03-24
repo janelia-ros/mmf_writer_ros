@@ -6,8 +6,8 @@ as_(nh_, name, false),
 action_name_(name)
 {
 	//register the goal and feeback callbacks
-	as_.registerGoalCallback(boost::bind(&RecordingActionServer::goalCB, this));
-	as_.registerPreemptCallback(boost::bind(&RecordingActionServer::preemptCB, this));
+//	as_.registerGoalCallback(boost::bind(&RecordingActionServer::goalCB, this));
+//	as_.registerPreemptCallback(boost::bind(&RecordingActionServer::preemptCB, this));
 
 	//subscribe to the data topic of interest
 	sub_ = nh_.subscribe("/random_number", 1, &RecordingActionServer::analysisCB, this);
@@ -16,6 +16,7 @@ action_name_(name)
 
 RecordingActionServer::~RecordingActionServer(void) {}
 
+// In this function we start recording :-)
 void RecordingActionServer::goalCB()
 {
 	ROS_INFO("We set a new goal");
