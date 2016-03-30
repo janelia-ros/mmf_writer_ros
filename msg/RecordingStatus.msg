@@ -2,7 +2,7 @@ bool recording
 string fileName
 string path
 duration recording_time
-uint32 elapsed_recording
+float32 elapsed_recording
 uint32 buffer
 uint32 lost_frames
 uint32 frameNumber

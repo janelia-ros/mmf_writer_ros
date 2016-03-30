@@ -59,7 +59,7 @@ void ProcessCameraFrame::onInit()
 //	ros::SubscriberStatusCallback connect_cb_blobs = boost::bind(&ProcessImageNodelet::connectCb,this);
 	recordingStatus_pub_ = nh.advertise<RecordingStatus>("recordingStatus",2);
 
-	actionServer = new RecordingActionServer("pois");
+	actionServer = new RecordingActionServer("mmf_recorder",nh);
 //	actionServer-> as_.registerGoalCallback(boost::bind(&ProcessCameraFrame::goalCB, this)) ;
 //	actionServer->as_.registerPreemptCallback(boost::bind(&RecordingActionServer::preemptCB, this)) ;
 //	as_.registerPreemptCallback(boost::bind(&RecordingActionServer::preemptCB, this));
