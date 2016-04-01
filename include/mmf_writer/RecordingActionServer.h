@@ -26,6 +26,8 @@ public:
 	void connectCamera();
 	void disconnectCamera();
 	void imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& wfovImg) ;
+	void imageWFOVCbPtr(const wfov_camera_msgs::WFOVImageConstPtr& wfovImg) ;
+
 	void goalCB();
 	//void goalCB(const mmf_writer::RecordActionGoalConstPtr& goal);
 

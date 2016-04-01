@@ -37,6 +37,43 @@
 #include <mmf_writer/Timer.h>
 #include <ros/ros.h>
 
+
+typedef struct __attribute__((packed,aligned(4))) _IplImage136
+{
+    int  nSize;             /* sizeof(IplImage) */
+    int  ID;                /* version (=0)*/
+    int  nChannels;         /* Most of OpenCV functions support 1,2,3 or 4 channels */
+    int  alphaChannel;      /* Ignored by OpenCV */
+    int  depth;             /* Pixel depth in bits: IPL_DEPTH_8U, IPL_DEPTH_8S, IPL_DEPTH_16S,
+                               IPL_DEPTH_32S, IPL_DEPTH_32F and IPL_DEPTH_64F are supported.  */
+    char colorModel[4];     /* Ignored by OpenCV */
+    char channelSeq[4];     /* ditto */
+    int  dataOrder;         /* 0 - interleaved color channels, 1 - separate color channels.
+                               cvCreateImage can only create interleaved images */
+    int  origin;            /* 0 - top-left origin,
+                               1 - bottom-left origin (Windows bitmaps style).  */
+    int  align;             /* Alignment of image rows (4 or 8).
+                               OpenCV ignores it and uses widthStep instead.    */
+    int  width;             /* Image width in pixels.                           */
+    int  height;            /* Image height in pixels.                          */
+    struct _IplROI *roi;    /* Image ROI. If NULL, the whole image is selected. */
+    struct _IplImage *maskROI;      /* Must be NULL. */
+    void  *imageId;                 /* "           " */
+    struct _IplTileInfo *tileInfo;  /* "           " */
+    int  imageSize;         /* Image data size in bytes
+                               (==image->height*image->widthStep
+                               in case of interleaved data)*/
+    char *imageData;        /* Pointer to aligned image data.         */
+    int  widthStep;         /* Size of aligned image row in bytes.    */
+    int  BorderMode[4];     /* Ignored by OpenCV.                     */
+    int  BorderConst[4];    /* Ditto.                                 */
+    char *imageDataOrigin;  /* Pointer to very origin of image data
+                               (not necessarily aligned) -
+                               needed for correct deallocation */
+}
+IplImage136;
+
+
 using namespace std;
 
 ThreadedStaticBackgroundCompressor::ThreadedStaticBackgroundCompressor()  {
@@ -361,7 +398,7 @@ std::string ThreadedStaticBackgroundCompressor::saveDescription() {
     std::stringstream os;
     os << "Stack of common background images, beginning with this header:\n" << headerDescription();
  //   cout << "Stack of common background images, beginning with this header:\n" << headerDescription();
-    os << "Then the background image, as an IplImage, starting with the " << sizeof (IplImage) << " byte image header, followed by the image data\n";
+    os << "Then the background image, as an IplImage, starting with the " << sizeof (IplImage136) << " byte image header, followed by the image data\n";
 //    cout << "Then the background image, as an IplImage, starting with the " << sizeof (IplImage) << " byte image header, followed by the image data\n";
     os << "Then nframes background removed images containing only differences from the background, in this format:\n";
 //    cout << "Then nframes background removed images containing only differences from the background, in this format:\n";
@@ -444,8 +481,41 @@ int ThreadedStaticBackgroundCompressor::sizeOnDisk() {
 void ThreadedStaticBackgroundCompressor::writeIplImageToByteStream(std::ofstream& os, const IplImage *src) {
    assert(src != NULL);
    ofstream::pos_type cloc = os.tellp(); 
-   os.write((char *) src, sizeof(IplImage));
+   // We first convert this to a packed header so that we get 136
+   // This should have been serialized to avoid these pitfalls
+   IplImage136 imout;
+   imout.ID = src->ID;
+   imout.align = src->align;
+   imout.alphaChannel = src->alphaChannel;
+   imout.dataOrder = src->dataOrder;
+   imout.depth = src->depth;
+   imout.height = src->height;
+   imout.imageSize = src->imageSize;
+   imout.nChannels = src->nChannels;
+   imout.nSize = sizeof(imout);
+   imout.origin = src->origin;
+   imout.width = src->width;
+   imout.widthStep = src->widthStep;
+   for (int j = 0; j < 4; ++j) {
+       imout.BorderConst[j] = src->BorderConst[j];
+       imout.BorderMode[j] = src->BorderMode[j];
+       imout.channelSeq[j] = src->channelSeq[j];
+       imout.colorModel[j] = src->colorModel[j];
+   }
+   imout.imageData = NULL;
+   imout.imageDataOrigin = NULL;
+   imout.imageId = NULL;
+   imout.maskROI = NULL;
+   imout.roi = NULL;
+   imout.tileInfo = NULL;
+
+   // We write our header
+   os.write((char *) &imout, sizeof(IplImage136));
+   // we can write using the original iplImage
    os.write((char *) src->imageData, src->imageSize);
+
+//   os.write((char *) src, sizeof(IplImage));
+//   os.write((char *) src->imageData, src->imageSize);
 
  }
 

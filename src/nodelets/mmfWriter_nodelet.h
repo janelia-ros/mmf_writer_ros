@@ -108,8 +108,10 @@ private:
 
 	// variables
 	bool recording_ , firstFrame_, instantiated_;
-	int framesRecorded_, framesToRecord_, keyframeInterval_ ;
+	int framesRecorded_, framesToRecord_, keyframeInterval_, lostFrames_ ;
 	int secondsToRecord_, secondsRecorded_ ;
+	bool lastFrame_ ;
+	double bufnum_time_;
 
 	int bufnum_ ;
 	std::string fname_, path_ ;

@@ -4,9 +4,11 @@
 #include <mmf_writer/advertisement_checker.h>
 #include <mmf_writer/StackReader.h>
 #include <mmf_writer/ImageMetaData.h>
+#include <opencv/cv.h>
 
 int main(int argc, char **argv)
 {
+
 
 	  ros::init(argc, argv, "mmf_writer");
 

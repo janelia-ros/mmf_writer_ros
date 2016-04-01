@@ -53,7 +53,7 @@ typedef struct _IplImage112
 IplImage112;
 
 
-typedef struct _IplImage136
+typedef struct __attribute__((packed,aligned(4))) _IplImage136
 {
     int32_t  nSize;         /* sizeof(IplImage) */
     int32_t  ID;            /* version (=0)*/
@@ -297,6 +297,7 @@ IplImage readIplImageHeader136 (std::ifstream& is, int &nsize) {
     IplImage136 im;
     IplImage imout;
     is.read((char *) &im, sizeof(im));
+//    is.read((char *) &im, sizeof(im));
     imout.ID = im.ID;
     imout.align = im.align;
     imout.alphaChannel = im.alphaChannel;

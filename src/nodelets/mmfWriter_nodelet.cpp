@@ -83,7 +83,9 @@ bool ProcessCameraFrame::refreshParamCallback(std_srvs::Empty::Request&, std_srv
 
 void ProcessCameraFrame::startRecording() {
 	framesRecorded_ = 0 ;
-
+	lastFrame_ = false;
+	bufnum_time_ = 0;
+	lostFrames_ = 0;
 	connectCamera() ;
 
 	Config config;
@@ -161,7 +163,7 @@ void ProcessCameraFrame::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& 
 			ROS_INFO(ts.str().c_str());
 		}
 
-		if ( elapsedRecordingTime_.sec < secondsToRecord_ ) {
+		if ( bufnum_time_ - 0.1 > elapsedRecordingTime_.sec  ) {
 			// a line worth days of work...
 			int headerFrameNum = wfovImg->frame_counter;
 			int frameDiff = headerFrameNum - prevFrameSeq_;
@@ -171,6 +173,7 @@ void ProcessCameraFrame::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& 
 				std::ostringstream os;
 				os << "Skipped " << frameDiff -1 << " frames!" ;
 				ROS_INFO(os.str().c_str());
+				lostFrames_ ++ ;
 			}
 
 			cv::Mat yep = cv_ptr->image ;
@@ -184,7 +187,7 @@ void ProcessCameraFrame::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& 
 			}
 
 			frameTimeStamp_ = cv_ptr->header.stamp - initialTimeStamp_;
-			double bufnum_time = (double)frameTimeStamp_.sec*1E3 + (double)frameTimeStamp_.nsec/1E6;
+			bufnum_time_ = (double)frameTimeStamp_.sec*1E3 + (double)frameTimeStamp_.nsec/1E6;
 			double camtime = (double)cv_ptr->header.stamp.sec*1E3 + (double)cv_ptr->header.stamp.nsec/1E6;
 
 			NameValueMetaData * md = new NameValueMetaData ;
@@ -197,7 +200,7 @@ void ProcessCameraFrame::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& 
 //			md->addData("bufnum_camera",cv_ptr->header.seq - initialCameraSeq_ );
 			md->addData("bufnum_camera",headerFrameNum );
 
-			md->addData("bufnum_time",bufnum_time);
+			md->addData("bufnum_time",bufnum_time_);
 			md->addData("camtime",camtime);
 
 			lsc.newFrame(im,md);
@@ -208,7 +211,8 @@ void ProcessCameraFrame::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& 
 //			ROS_INFO(is.str().c_str());
 			RecordingStatus recStatus;
 			recStatus.buffer = bufnum_ ;
-			recStatus.elapsed_recording = bufnum_time;
+			recStatus.elapsed_recording = bufnum_time_;
+			recStatus.lost_frames = lostFrames_ ;
 			recordingStatus_pub_.publish(recStatus);
 
 			framesRecorded_ ++ ;

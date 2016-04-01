@@ -70,6 +70,7 @@ void RecordingActionServer::goalCB()
 void RecordingActionServer::startRecording() {
 	framesRecorded_ = 0 ;
 	lostFrames_ = 0 ;
+	bufnum_time_ = 0;
 
 	/* virtual inline void setThresholds(int threshBelowBackground, int threshAboveBackground, int smallDimMinSize, int lgDimMinSize) {
 	 *
@@ -79,8 +80,11 @@ void RecordingActionServer::startRecording() {
 	 */
 	lsc.setThresholds(0, 5, 2, 3); // sticking w/ defaults for now
 	// We'll hard code for now and change them later on
-	lsc.setIntervals(180, 1);
-	lsc.setFrameRate(30);
+//	lsc.setIntervals(180, 1);
+	lsc.setIntervals(goal_.keyframe_interval, 1);
+	lsc.setFrameRate(goal_.fps);
+
+//	lsc.setFrameRate(30);
 
 	std::ostringstream finalOutput ;
 	finalOutput << goal_.path << '/' << goal_.fileName << ".mmf";
@@ -111,7 +115,7 @@ void RecordingActionServer::connectCamera() {
 	{
 
 		ROS_INFO("We subscribe to the camera!");
-		cam_wfov_sub_ = nh_.subscribe("image",50,&RecordingActionServer::imageWFOVCb,this);
+		cam_wfov_sub_ = nh_.subscribe("image",1000,&RecordingActionServer::imageWFOVCb,this);
 
 
 	}
@@ -144,18 +148,24 @@ void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPt
 			ts << "Elapsed Time: " << elapsedRecordingTime_.sec << " sec";
 			ROS_INFO(ts.str().c_str());
 		}
+		ROS_INFO("Time is %f", bufnum_time_) ;
 
-		if ( elapsedRecordingTime_.sec < goal_.timeToRecord) {
+		if ( bufnum_time_/1000 < goal_.timeToRecord ) {
 			// a line worth days of work...
 			int headerFrameNum = wfovImg->frame_counter;
 			int frameDiff = headerFrameNum - prevFrameSeq_;
 			prevFrameSeq_ = headerFrameNum ;
 
-			if (frameDiff > 1) {
+			if (framesRecorded_ == 0) { // start of a new acquisition
+				initialTimeStamp_ = cv_ptr->header.stamp;
+				initialCameraSeq_ = headerFrameNum;
+			}
+
+			if (frameDiff > 1 && framesRecorded_ != 0) {
 				std::ostringstream os;
 				os << "Skipped " << frameDiff -1 << " frames!" ;
 				ROS_INFO(os.str().c_str());
-				lostFrames_ += frameDiff -1;
+				lostFrames_ = lostFrames_ + (frameDiff - 1);
 			}
 
 			cv::Mat yep = cv_ptr->image ;
@@ -177,9 +187,10 @@ void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPt
 			md->addData("ROIX",0);
 			md->addData("ROIY",0);
 
-			bufnum_ = headerFrameNum - initialCameraSeq_;
-			md->addData("bufnum",bufnum_);
-//			md->addData("bufnum_camera",cv_ptr->header.seq - initialCameraSeq_ );
+//			bufnum_ = headerFrameNum - initialCameraSeq_;
+			md->addData("bufnum",framesRecorded_);
+//			md->addData("bufnum",bufnum_);
+	//		md->addData("bufnum_camera",cv_ptr->header.seq - initialCameraSeq_ );
 			md->addData("bufnum_camera",headerFrameNum );
 
 			md->addData("bufnum_time",bufnum_time_);
@@ -189,6 +200,7 @@ void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPt
 
 			feedback_.feedback.recording_feedback.buffer = framesRecorded_;
 			feedback_.feedback.recording_feedback.elapsed_recording = bufnum_time_/1000 ;
+			feedback_.feedback.recording_feedback.lost_frames = lostFrames_ ;
 			as_.publishFeedback(feedback_.feedback);
 
 			framesRecorded_ ++ ;
