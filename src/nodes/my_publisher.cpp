@@ -11,7 +11,9 @@ int main(int argc, char** argv)
 	ros::NodeHandle nh;
 	image_transport::ImageTransport it(nh);
 	//image_transport::Publisher image_pub_ = it.advertise("camera/image_raw", 1);
-	image_transport::CameraPublisher cam_pub_ = it.advertiseCamera("camera/image_raw", 1);
+//	image_transport::CameraPublisher cam_pub_ = it.advertiseCamera("camera/image_raw", 1);
+	image_transport::CameraPublisher cam_pub_ = it.advertiseCamera("image_raw", 1);
+
 	//cam_pub_.
 	//ros::Publisher pub_cam_info = nh.advertise<sensor_msgs::CameraInfo>("camera/camera_info", 1);
 	//  sensor_msgs::CameraInfo cam_info;

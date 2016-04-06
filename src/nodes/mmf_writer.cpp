@@ -4,10 +4,16 @@
 #include <mmf_writer/advertisement_checker.h>
 #include <mmf_writer/StackReader.h>
 #include <mmf_writer/ImageMetaData.h>
-#include <opencv/cv.h>
 
 int main(int argc, char **argv)
 {
+
+	StackReader sr("/home/bruno/136_saved.mmf");
+
+	// frameAddedTimeStamp is elapsedtime in labview
+
+	std::string ya = sr.diagnostics();
+	std::ostringstream os ;
 
 
 	  ros::init(argc, argv, "mmf_writer");

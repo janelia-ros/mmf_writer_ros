@@ -34,7 +34,7 @@ add_message_files(
 )
 
 add_action_files(
-	DIRECTORY action 
+	DIRECTORY action
 	FILES
 	Record.action
 )
@@ -97,8 +97,8 @@ install(FILES nodelet_plugins.xml
 
 
 # add the publisher example
-add_executable(my_publisher2 src/nodes/my_publisher.cpp)
-target_link_libraries(my_publisher2 ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
+#add_executable(my_publisher src/nodes/my_publisher.cpp)
+#target_link_libraries(my_publisher ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBRARIES})
 
 # Standalone node
 add_executable(mmf_writer_exe src/nodes/mmf_writer.cpp)
@@ -108,12 +108,12 @@ install(TARGETS mmf_writer_exe
         DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
-#add_executable(my_publisher_exe src/nodes/my_publisher.cpp)
-#target_link_libraries(my_publisher_exe ${PROJECT_NAME}  ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
-#SET_TARGET_PROPERTIES(my_publisher_exe PROPERTIES OUTPUT_NAME my_publisher)
-#install(TARGETS my_publisher_exe
-#        DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
-#)
+add_executable(my_publisher_exe src/nodes/my_publisher.cpp)
+target_link_libraries(my_publisher_exe ${PROJECT_NAME}  ${Boost_LIBRARIES} ${OpenCV_LIBRARIES})
+SET_TARGET_PROPERTIES(my_publisher_exe PROPERTIES OUTPUT_NAME my_publisher)
+install(TARGETS my_publisher_exe
+        DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
 
 
 # install the launch file
