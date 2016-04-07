@@ -11,7 +11,8 @@
 #include <queue>
 #include <thread>
 #include <mutex>
-
+#include <thread>
+#include <chrono>
 
 class ThreadedLinearStackCompressor {
 public:
@@ -160,9 +161,21 @@ protected:
     bool processing; //really should be a mutex, but whatever
 //    bool lockActiveStack; //really should be a mutex, but whatever
 //    std::mutex processing; //really should be a mutex, but whatever
-    std::mutex lockActiveStack; //really should be a mutex, but whatever
+    std::mutex lockActiveMutex; //really should be a mutex, but whatever
+    std::mutex compressedStacksMutex_ ;
+    std::mutex stacksToWriteMutex_;
+    std::mutex imageStacksMutex_;
 
     std::string stacksavedescription;
+    void mergeCompressedStacksThreadFcn();
+    void startThreads();
+    void stopThreads();
+    std::thread mergeCompressedStacksThread_;
+    bool mergeCompressedStacksActive_ ;
+
+    bool compressionThreadActive_, writingThreadActive_;
+    bool stacksLeftToCompress_ ;
+    bool mergingStacks_ ;
 
     virtual void createStack();
     virtual void addFrameToStack(IplImage **im, ImageMetaData *metadata);

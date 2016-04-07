@@ -17,7 +17,6 @@ action_name_(name)
 
 	connectCamera();
 
-
 }
 
 RecordingActionServer::~RecordingActionServer(void) {}
@@ -66,20 +65,22 @@ void RecordingActionServer::startRecording() {
 	 * threshAboveBackground: pixel values greater than the background value must be this much above the background to count
 	 * smallDimMinSize (s), lgDimMinSize (l): regions containing non-background pixels must be at least these dimensions (sxl or lxs)
 	 */
-	lsc.setThresholds(0, 5, 2, 3); // sticking w/ defaults for now
-	// We'll hard code for now and change them later on
-	//	lsc.setIntervals(180, 1);
-	lsc.setIntervals(goal_.keyframe_interval, 1);
-	lsc.setFrameRate(goal_.fps);
+	lsc = new ThreadedLinearStackCompressor;
 
-	//	lsc.setFrameRate(30);
+	lsc->setThresholds(0, 5, 2, 3); // sticking w/ defaults for now
+	// We'll hard code for now and change them later on
+	//	lsc->setIntervals(180, 1);
+	lsc->setIntervals(goal_.keyframe_interval, 1);
+	lsc->setFrameRate(goal_.fps);
+
+	//	lsc->setFrameRate(30);
 
 	std::ostringstream finalOutput ;
 	finalOutput << goal_.path << '/' << goal_.fileName << ".mmf";
 	ROS_INFO(finalOutput.str().c_str());
-	lsc.setOutputFileName(finalOutput.str().c_str());
+	lsc->setOutputFileName(finalOutput.str().c_str());
 
-	lsc.startRecording(999999);
+	lsc->startRecording(999999);
 
 	//	firstFrame_ = true;
 	ROS_INFO("We started recording a new file!");
@@ -95,18 +96,16 @@ void RecordingActionServer::startRecording() {
 
 void RecordingActionServer::connectCamera() {
 
-//if (!cam_sub_) {
-//	image_transport::TransportHints hints("raw",ros::TransportHints(),nh_);
-//	cam_sub_ = it_in_->subscribeCamera("image_raw",500,&RecordingActionServer::imageCb,this,hints);
-//
-//}
+if (!cam_sub_) {
+	image_transport::TransportHints hints("raw",ros::TransportHints(),nh_);
+	cam_sub_ = it_in_->subscribeCamera("image_raw",500,&RecordingActionServer::imageCb,this,hints);
+}
 
-	if (!cam_wfov_sub_)
-	{
-		ROS_INFO("We subscribe to the camera!");
-		cam_wfov_sub_ = nh_.subscribe("image",1000,&RecordingActionServer::imageWFOVCb,this);
-
-	}
+//	if (!cam_wfov_sub_)
+//	{
+//		ROS_INFO("We subscribe to the camera!");
+//		cam_wfov_sub_ = nh_.subscribe("image",1000,&RecordingActionServer::imageWFOVCb,this);
+//	}
 }
 
 void RecordingActionServer::processFrame(const cv_bridge::CvImageConstPtr & cv_ptr,
@@ -168,7 +167,7 @@ void RecordingActionServer::processFrame(const cv_bridge::CvImageConstPtr & cv_p
 		md->addData("bufnum_time",bufnum_time_);
 		md->addData("camtime",camtime);
 
-		lsc.newFrame(im,md);
+		lsc->newFrame(im,md);
 
 		feedback_.feedback.recording_feedback.buffer = framesRecorded_;
 		feedback_.feedback.recording_feedback.elapsed_recording = bufnum_time_/1000 ;
@@ -220,13 +219,9 @@ void RecordingActionServer::imageCb(const sensor_msgs::ImageConstPtr& image_msg,
 			result_.result.recorder_result.buffer = framesRecorded_;
 			result_.result.recorder_result.elapsed_recording = bufnum_time_/1000;
 			result_.result.recorder_result.lost_frames = lostFrames_ ;
-
 			as_.setSucceeded(result_.result);
-
 		}
-
 	}
-
 }
 
 void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPtr& wfovImg) {
@@ -255,7 +250,7 @@ void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPt
 
 	} else {
 
-		ROS_INFO("We are in the else loop of the recording");
+		//ROS_INFO("We are in the else loop of the recording");
 		if (as_.isActive()) {
 			ROS_INFO("the action is active, so we issue stop recordng");
 			stopRecording();
@@ -271,34 +266,53 @@ void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPt
 
 }
 
+void writeSupplementalDataFile( std::string mmf, std::string dat) {
+
+	ROS_INFO("writeSuppDataFile, filename to load is : %s ",mmf.c_str());
+	StackReader sr(mmf.c_str());
+	sr.createSupplementalDataFile(dat.c_str());
+	sr.closeInputFile();
+	//ROS_INFO("We are done, going to delete!");
+	//delete(&sr);
+	ROS_INFO("We are done!");
+}
+
 void RecordingActionServer::stopRecording() {
 	// We now enable things immediately
 	//disconnectCamera();
-	lsc.stopRecording();
-	lsc.saveDescription();
-	lsc.closeOutputFile();
+	lsc->stopRecording();
+	//lsc->saveDescription();
+	lsc->closeOutputFile();
+	delete(lsc);
+	ROS_INFO("We deleted lsc");
 
 	std::ostringstream fp, fpDat ;
 	fp << goal_.path.c_str() << '/' << goal_.fileName.c_str() << ".mmf" ;
 	fpDat << goal_.path.c_str() << '/' << goal_.fileName.c_str() << ".dat" ;
+//	std::thread datThread = std::thread(writeSupplementalDataFile, fp.str(),fpDat.str());
+//	datThread.detach(); // we don't care what happens
+	datThread = boost::thread(writeSupplementalDataFile,fp.str(),fpDat.str());
+	datThread.detach();
 
-	std::string ye = fp.str().c_str();
-	ROS_INFO("filename to load is : %s ",ye.c_str());
-	StackReader sr(fp.str().c_str());
-	sr.createSupplementalDataFile(fpDat.str().c_str());
-	std::string ya = sr.diagnostics();
-	std::ostringstream os ;
-	for (int f=0; f < sr.getTotalFrames()-1 ; f++ ) {
 
-		const ImageMetaData * md = sr.getMetaData(1);
-		std::map<std::string, double> gimme = md->getFieldNamesAndValues();
-		md = sr.getMetaData(f+1);
-		gimme = md->getFieldNamesAndValues();
-		os << "bufnum: " << gimme["bufnum"] << ", bufnum_camera: " << gimme["bufnum_camera"] << ", bufnum_time: " << gimme["bufnum_time"] << std::endl ;
-	}
-	ROS_INFO(os.str().c_str());
+	//	ROS_INFO("filename to load is : %s ",ye.c_str());
+//	StackReader sr(fp.str().c_str());
+//	sr.createSupplementalDataFile(fpDat.str().c_str());
+//	sr.closeInputFile();
+//	delete(&sr);
+//	std::string ya = sr.diagnostics();
+//	std::ostringstream os ;
+//	for (int f=0; f < sr.getTotalFrames()-1 ; f++ ) {
+//
+//		const ImageMetaData * md = sr.getMetaData(1);
+//		std::map<std::string, double> gimme = md->getFieldNamesAndValues();
+//		md = sr.getMetaData(f+1);
+//		gimme = md->getFieldNamesAndValues();
+//		os << "bufnum: " << gimme["bufnum"] << ", bufnum_camera: " << gimme["bufnum_camera"] << ", bufnum_time: " << gimme["bufnum_time"] << std::endl ;
+//	}
+//	ROS_INFO(os.str().c_str());
 
-	std::cout << "We exit stopRecording";
+	ROS_INFO("We exit stopRecording");
 
 }
 

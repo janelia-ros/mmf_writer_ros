@@ -24,11 +24,11 @@ int main(int argc, char** argv)
 
 	std::string fnameBase = "/home/bruno/images/20141026_154700@FCF_attP2_1500062@UAS_TNT_2_0003@t10@n#n#n#n@30@" ;
 	std::string mmfFileName = "/home/bruno/valid.mmf";
-
+	mmfFileName = "/home/bruno/136_saved.mmf";
 	cv::Mat image;
 	sensor_msgs::ImagePtr img_msg;
 	sensor_msgs::CameraInfoPtr ci (new sensor_msgs::CameraInfo());
-	ros::Rate loop_rate(60);
+	ros::Rate loop_rate(30);
 	int i = 0;
 	int framesToLoad = 50 ;
 	std::vector<cv::Mat> matVector ;

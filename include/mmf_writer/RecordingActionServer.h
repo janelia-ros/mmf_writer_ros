@@ -19,6 +19,7 @@
 #include "mmf_writer/NameValueMetaData.h"
 #include <cv_bridge/cv_bridge.h>
 #include <image_transport/image_transport.h>
+#include <boost/thread.hpp>
 
 class RecordingActionServer
 {
@@ -61,12 +62,13 @@ protected:
 	mmf_writer::RecordingStatus * result;
 
 	// MMF stuff
-	ThreadedLinearStackCompressor lsc;
+	ThreadedLinearStackCompressor * lsc;
 	long framesRecorded_ , secondsRecorded_, prevFrameSeq_, initialCameraSeq_, bufnum_;
 	bool recording_ , firstFrame_;
 	ros::Time recordingStartTime_, initialTimeStamp_;
 	ros::Duration elapsedRecordingTime_, frameTimeStamp_;
 	double bufnum_time_;
+	boost::thread datThread;
 
 	ros::Subscriber sub_;
 } ;

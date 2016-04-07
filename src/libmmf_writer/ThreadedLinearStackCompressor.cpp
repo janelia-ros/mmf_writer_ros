@@ -27,7 +27,9 @@ ThreadedLinearStackCompressor::ThreadedLinearStackCompressor(const ThreadedLinea
 }
 
 ThreadedLinearStackCompressor::~ThreadedLinearStackCompressor() {
-   closeOutputFile();
+	   stopThreads();
+
+	closeOutputFile();
    while (!imageStacks.empty()) {
        delete imageStacks.front();
        imageStacks.pop();
@@ -65,9 +67,13 @@ void ThreadedLinearStackCompressor::init() {
     processing = false; //really should be a mutex, but whatever
 //    lockActiveStack = false; //really should be a mutex, but whatever
     currentFileSize = 0;
-    numStacksToMerge = 24; // Was originally 12
+    numStacksToMerge = 12; // Was originally 12
     memoryUsedByCompressedStacks = 0;
-    
+    // thread stuff
+    compressionThreadActive_ = false;
+    writingThreadActive_ = false;
+
+
 }
 
 void ThreadedLinearStackCompressor::newFrame(const IplImage* im, ImageMetaData *metadata) {
@@ -77,19 +83,10 @@ void ThreadedLinearStackCompressor::newFrame(const IplImage* im, ImageMetaData *
     tim.start();
 
     IplImage *imcpy = cvCloneImage(im);
-//    while (--maxCycles > 0) {
-//    	//intentionally blank
-//    }
-    //    while (lockActiveStack && --maxCycles > 0) {
-//        //intentionally blank
-//    }
-  //  cout << "lockActiveStack = " << lockActiveStack << "; processing = " << processing << "\n";
 
-
-//    lockActiveStack = true;
-    lockActiveStack.lock();
+    lockActiveMutex.lock();
     addFrameToStack(&imcpy, metadata);
-    lockActiveStack.unlock();
+    lockActiveMutex.unlock();
 //    lockActiveStack = false;
 
     if (recordingState == recording ) {
@@ -113,9 +110,9 @@ void ThreadedLinearStackCompressor::newFrame(const IplImage* im, ImageMetaData *
         while (tim.getElapsedTimeInSec() < 0.95/frameRate && compressStack()) {
         //intentionally blank
         }
-        while (tim.getElapsedTimeInSec() < 0.95/frameRate && writeFinishedStack()) {
+//        while (tim.getElapsedTimeInSec() < 0.95/frameRate && writeFinishedStack()) {
             //intentionally blank
-        }
+//        }
         processing = false;
     }
 }
@@ -143,23 +140,24 @@ void ThreadedLinearStackCompressor::addFrameToStack(IplImage **im, ImageMetaData
 }
 
 void ThreadedLinearStackCompressor::startRecording(int numFramesToRecord) {
-    recordingState = recording;
+
+	startThreads();
+
+	recordingState = recording;
     this->framesToRecord = numFramesToRecord;
+
 }
 
 void ThreadedLinearStackCompressor::finishRecording() {
     ROS_INFO("We enter the finishrecording()");
 
-	int maxCycles = (int) 1E9; //just so it doesn't hang
-    while (processing && --maxCycles > 0) {
-        //intentionally blank
-    }
-    ROS_INFO("We get out of the loop");
-
     processing = true;
-    lockActiveStack.lock();
+    lockActiveMutex.lock();
 
+    ROS_INFO("We set recording state to idle");
     recordingState = idle;
+    ROS_INFO("We push the active stack to imageStacks");
+
     if (activeStack != NULL) {
         if (activeStack->numToProccess() > 0) {
             imageStacks.push(activeStack);
@@ -168,18 +166,34 @@ void ThreadedLinearStackCompressor::finishRecording() {
         }
         activeStack = NULL;
     }
-    ROS_INFO("We get to the compressStack part");
+    lockActiveMutex.unlock();
+
+    ROS_INFO("We get to the finishrecording->compressStack part");
     while (compressStack()) {
         //intentionally blank
     }
-    while (writeFinishedStack()) {
-        //intentionally blank
-    }
+
+
+    ROS_INFO("We enter the writeFinishedStack, this should be a blocking function");
+    writeFinishedStack();
+    ROS_INFO("We are done with the writeFinishedStack");
+
+    //    while (writeFinishedStack()) {
+//        //intentionally blank
+//    }
    
 
     processing = false;
-    lockActiveStack.unlock();
-//    lockActiveStack = false;
+    stopThreads();
+    //    lockActiveStack = false;
+    ROS_INFO("We exit finishrecording inside lsc");
+}
+
+void ThreadedLinearStackCompressor::stopThreads() {
+	mergeCompressedStacksActive_ = false;
+	if (mergeCompressedStacksThread_.joinable()) {
+		mergeCompressedStacksThread_.join();
+	}
 }
 
 void ThreadedLinearStackCompressor::createStack() {
@@ -192,11 +206,12 @@ void ThreadedLinearStackCompressor::createStack() {
 bool ThreadedLinearStackCompressor::compressStack() {
      setCompressionStack();
      if (stackBeingCompressed != NULL) {
-    	 // This processes one frame at a time, not the whole stack of images against a background image
-         stackBeingCompressed->processFrame();
+    	 // In my linux implementation, once we call this function, a # of threads processes all
+    	 // the images in sbc , so we don't need to "threadify" this part of the code.
+    	 // The windows version has this on a thread in the linear stack compressor
+    	 stackBeingCompressed->processFrame();
          return true;
      }
-         
      return false;
 }
 
@@ -210,25 +225,55 @@ void ThreadedLinearStackCompressor::numStacksWaiting(int& numToCompress, int& nu
 }
 
 void ThreadedLinearStackCompressor::setCompressionStack() {
-   // Checks if we're done compressing the stack?
+   std::lock_guard<std::mutex> lock(compressedStacksMutex_);
+
+   //ROS_INFO("We enter setCompressionStack");
+	// Checks if we're done compressing the stack?
 	// This gets triggered if we are done processing the stack
 	// we check if there is a stack being compressed and if the numToProcess has reached 0, ie, it ended
    if (stackBeingCompressed != NULL && stackBeingCompressed->numToProccess() <= 0) {
-        compressedStacks.push(stackBeingCompressed);
+	   // we put a new compressed stack in the compressedStacks vector
+	   ROS_INFO("We put a new compressed stack in the vector");
+	   compressedStacks.push(stackBeingCompressed);
         memoryUsedByCompressedStacks += stackBeingCompressed->sizeInMemory();
         stackBeingCompressed = NULL;
     }
    // We add a new stack to be compressed if there's one in the imageStacks queue, this only happens when the keyframe value is reached
+   std::lock_guard<std::mutex> lockimgStack(imageStacksMutex_);
    if (stackBeingCompressed == NULL && !imageStacks.empty()) {
-        stackBeingCompressed = imageStacks.front();
+	   ROS_INFO("We get a new stack from imagestacks into stackBeing compressed");
+	   stackBeingCompressed = imageStacks.front();
         imageStacks.pop();
-    }      
+    }
+
+   stacksLeftToCompress_ = (stackBeingCompressed != NULL);
 }
 
 //returns true if there may be stacks remaining to write
 bool ThreadedLinearStackCompressor::writeFinishedStack() {
-    mergeCompressedStacks();
+
+//	mergeCompressedStacks();
+
+	ROS_INFO(" We wait until out thread goes through our compressedStacks vector");
+
+	ROS_INFO("compressedStacks.empty is %d", compressedStacks.empty());
+	ROS_INFO("imageStacks.empty is %d", imageStacks.empty());
+	ROS_INFO("mergingStacks_ is %d", mergingStacks_);
+	while( !compressedStacks.empty() || !imageStacks.empty() || mergingStacks_) {
+		setCompressionStack();
+		ROS_INFO("compressedStacks.empty is %d", compressedStacks.empty());
+		ROS_INFO("imageStacks.empty is %d", imageStacks.empty());
+		ROS_INFO("mergingStacks_ is %d", mergingStacks_);
+
+		std::this_thread::sleep_for (std::chrono::milliseconds(250));
+		// intentionally left blank
+		}
+	ROS_INFO("All merged, no more compressed stacks!");
+
+
+	ROS_INFO("lsc->writeFinished->setWritingStack!");
     setWritingStack();
+
     if (stackBeingWritten != NULL) {
         if (outfile == NULL) {
             openOutputFile();
@@ -333,11 +378,62 @@ string ThreadedLinearStackCompressor::saveDescription() {
     return os.str();
 }
 
-void ThreadedLinearStackCompressor::mergeCompressedStacks() {
+void ThreadedLinearStackCompressor::startThreads() {
+	mergeCompressedStacksActive_ = true;
+	mergeCompressedStacksThread_ = 	std::thread(&ThreadedLinearStackCompressor::mergeCompressedStacksThreadFcn, this);
 
+}
+
+
+void ThreadedLinearStackCompressor::mergeCompressedStacksThreadFcn() {
+
+	while (mergeCompressedStacksActive_) {
+
+		setCompressionStack();
+		compressedStacksMutex_.lock();
+
+	    if ((recordingState != recording && !compressedStacks.empty()) || compressedStacks.size() >= numStacksToMerge) {
+	        ROS_INFO( "merging stacks in the thread function ");
+	        mergingStacks_ = true;
+	        ThreadedStaticBackgroundCompressor *sbc = compressedStacks.front();
+	        compressedStacks.pop();
+	        vector<ThreadedStaticBackgroundCompressor *> stacksToMerge;
+	        for (int j = 1; !compressedStacks.empty() && j < numStacksToMerge; ++j) {
+	            stacksToMerge.push_back(compressedStacks.front());
+	            compressedStacks.pop();
+	        }
+	        compressedStacksMutex_.unlock();
+	        memoryUsedByCompressedStacks *= (compressedStacks.size() / (compressedStacks.size() + numStacksToMerge)); //estimates, in the unusual case compressedStacks wasn't emptied
+
+	        sbc->mergeStacks(stacksToMerge);
+	        for (vector<ThreadedStaticBackgroundCompressor *>::iterator it = stacksToMerge.begin(); it != stacksToMerge.end(); ++it) {
+	            delete (*it);
+	            *it = NULL;
+	        }
+	        stacksToWriteMutex_.lock();
+	        stacksToWrite.push(sbc);
+	        stacksToWriteMutex_.unlock();
+
+	        ROS_INFO("done merging stacks in the thread");
+	        mergingStacks_ = false;
+
+	    }
+
+	    compressedStacksMutex_.unlock();
+
+	    std::this_thread::sleep_for(std::chrono::milliseconds(100));
+
+	}
+
+}
+
+void ThreadedLinearStackCompressor::mergeCompressedStacks() {
+	return; // We now use a thread just for this :)
+
+	std::lock_guard<std::mutex> lock(compressedStacksMutex_);
     
     if ((recordingState != recording && !compressedStacks.empty()) || compressedStacks.size() >= numStacksToMerge) {
-        cout << "merging stacks " << endl << flush;
+        ROS_INFO("merging stacks in the function");
         ThreadedStaticBackgroundCompressor *sbc = compressedStacks.front();
         // let's do some debug
 //        std::stringstream os;
@@ -347,7 +443,6 @@ void ThreadedLinearStackCompressor::mergeCompressedStacks() {
 //        	os << "bufnum: " << gimme["bufnum"] << ", bufnum_time: " << gimme["bufnum_time"] << std::endl ;
 //        }
 //    	ROS_INFO(os.str().c_str());
-
         compressedStacks.pop();
         vector<ThreadedStaticBackgroundCompressor *> stacksToMerge;
         for (int j = 1; !compressedStacks.empty() && j < numStacksToMerge; ++j) {
@@ -355,6 +450,7 @@ void ThreadedLinearStackCompressor::mergeCompressedStacks() {
             compressedStacks.pop();
         }
         memoryUsedByCompressedStacks *= (compressedStacks.size() / (compressedStacks.size() + numStacksToMerge)); //estimates, in the unusual case compressedStacks wasn't emptied
+
         sbc->mergeStacks(stacksToMerge);
         for (vector<ThreadedStaticBackgroundCompressor *>::iterator it = stacksToMerge.begin(); it != stacksToMerge.end(); ++it) {
             delete (*it);
@@ -364,10 +460,6 @@ void ThreadedLinearStackCompressor::mergeCompressedStacks() {
         cout << "done merging stacks " << endl << flush;
     }
 }
-
-
-
-
 
 
 void ThreadedLinearStackCompressor::setWritingStack() {
