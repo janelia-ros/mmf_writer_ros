@@ -163,19 +163,22 @@ protected:
 //    std::mutex processing; //really should be a mutex, but whatever
     std::mutex lockActiveMutex; //really should be a mutex, but whatever
     std::mutex compressedStacksMutex_ ;
-    std::mutex stacksToWriteMutex_;
+    std::mutex stacksToWriteMutex_, stackBeingWrittenMutex_;
     std::mutex imageStacksMutex_;
+    std::mutex outfileMutex_;
 
     std::string stacksavedescription;
     void mergeCompressedStacksThreadFcn();
     void startThreads();
     void stopThreads();
-    std::thread mergeCompressedStacksThread_;
-    bool mergeCompressedStacksActive_ ;
+    void writeThreadFcn();
+    std::thread mergeCompressedStacksThread_, writeThread_;
+    bool mergeCompressedStacksThreadActive_ ;
+    bool stacksLeftToWrite_;
 
-    bool compressionThreadActive_, writingThreadActive_;
+    bool compressionThreadActive_, writeThreadActive_;
     bool stacksLeftToCompress_ ;
-    bool mergingStacks_ ;
+    bool mergingStacks_, savingStacks_ ;
 
     virtual void createStack();
     virtual void addFrameToStack(IplImage **im, ImageMetaData *metadata);
@@ -191,7 +194,7 @@ protected:
     virtual inline uint32_t idCode () {
         return 0xa3d2d45d; //CRC32 hash of "LinearStackCompressor" from fileformat.info
     }
-    std::ofstream::pos_type currentFileSize;
+    std::ofstream::pos_type currentFileSize_;
 private:
      ThreadedLinearStackCompressor(const ThreadedLinearStackCompressor& orig);
      void init();

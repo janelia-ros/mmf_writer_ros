@@ -96,16 +96,17 @@ void RecordingActionServer::startRecording() {
 
 void RecordingActionServer::connectCamera() {
 
-if (!cam_sub_) {
-	image_transport::TransportHints hints("raw",ros::TransportHints(),nh_);
-	cam_sub_ = it_in_->subscribeCamera("image_raw",500,&RecordingActionServer::imageCb,this,hints);
-}
+//if (!cam_sub_) {
+//	image_transport::TransportHints hints("raw",ros::TransportHints(),nh_);
+//	cam_sub_ = it_in_->subscribeCamera("image_raw",500,&RecordingActionServer::imageCb,this,hints);
+//}
 
-//	if (!cam_wfov_sub_)
-//	{
-//		ROS_INFO("We subscribe to the camera!");
-//		cam_wfov_sub_ = nh_.subscribe("image",1000,&RecordingActionServer::imageWFOVCb,this);
-//	}
+
+	if (!cam_wfov_sub_)
+	{
+		ROS_INFO("We subscribe to the camera!");
+		cam_wfov_sub_ = nh_.subscribe("image",1000,&RecordingActionServer::imageWFOVCb,this);
+	}
 }
 
 void RecordingActionServer::processFrame(const cv_bridge::CvImageConstPtr & cv_ptr,
@@ -172,6 +173,8 @@ void RecordingActionServer::processFrame(const cv_bridge::CvImageConstPtr & cv_p
 		feedback_.feedback.recording_feedback.buffer = framesRecorded_;
 		feedback_.feedback.recording_feedback.elapsed_recording = bufnum_time_/1000 ;
 		feedback_.feedback.recording_feedback.lost_frames = lostFrames_ ;
+		feedback_.feedback.recording_feedback.bytes_written = lsc->numBytesWritten() ;
+
 		as_.publishFeedback(feedback_.feedback);
 
 		framesRecorded_ ++ ;
@@ -228,14 +231,14 @@ void RecordingActionServer::imageWFOVCb(const wfov_camera_msgs::WFOVImageConstPt
 	//	ROS_INFO("We enter imageWFOVCb and will feedback");
 
 
-	if (as_.isPreemptRequested() || !ros::ok())
-	{
-		ROS_INFO("%s: Preempted", action_name_.c_str());
-		recording_ = false;
-		stopRecording();
-		as_.setAborted();
-		//	        disconnectCamera();
-	}
+//	if (as_.isPreemptRequested() || !ros::ok())
+//	{
+//		ROS_INFO("%s: Preempted", action_name_.c_str());
+//		recording_ = false;
+//		stopRecording();
+//		as_.setAborted();
+//		//	        disconnectCamera();
+//	}
 
 	cv_bridge::CvImageConstPtr cv_ptr = cv_bridge::toCvCopy(wfovImg->image);
 

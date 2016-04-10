@@ -3,6 +3,7 @@ string fileName
 string path
 duration recording_time
 float32 elapsed_recording
+uint32 bytes_written
 uint32 buffer
 uint32 lost_frames
 uint32 frameNumber

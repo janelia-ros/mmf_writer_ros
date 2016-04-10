@@ -66,13 +66,13 @@ void ThreadedLinearStackCompressor::init() {
     smallDimMinSize = 3;
     processing = false; //really should be a mutex, but whatever
 //    lockActiveStack = false; //really should be a mutex, but whatever
-    currentFileSize = 0;
+    currentFileSize_ = 0;
     numStacksToMerge = 12; // Was originally 12
     memoryUsedByCompressedStacks = 0;
     // thread stuff
     compressionThreadActive_ = false;
-    writingThreadActive_ = false;
-
+    writeThreadActive_ = false;
+    savingStacks_ = false;
 
 }
 
@@ -190,10 +190,15 @@ void ThreadedLinearStackCompressor::finishRecording() {
 }
 
 void ThreadedLinearStackCompressor::stopThreads() {
-	mergeCompressedStacksActive_ = false;
+	mergeCompressedStacksThreadActive_ = false;
 	if (mergeCompressedStacksThread_.joinable()) {
 		mergeCompressedStacksThread_.join();
 	}
+	writeThreadActive_ = false;
+	if (writeThread_.joinable()) {
+		writeThread_.join();
+	}
+
 }
 
 void ThreadedLinearStackCompressor::createStack() {
@@ -268,36 +273,25 @@ bool ThreadedLinearStackCompressor::writeFinishedStack() {
 		std::this_thread::sleep_for (std::chrono::milliseconds(250));
 		// intentionally left blank
 		}
+
 	ROS_INFO("All merged, no more compressed stacks!");
 
-
 	ROS_INFO("lsc->writeFinished->setWritingStack!");
-    setWritingStack();
 
-    if (stackBeingWritten != NULL) {
-        if (outfile == NULL) {
-            openOutputFile();
-        }
-        if (outfile == NULL) {
-            return false;
-        }
+	// We wait until we have finished writing all stacks;
+	while(stacksLeftToWrite_ > 0 || savingStacks_ ) {
+		std::this_thread::sleep_for (std::chrono::milliseconds(250));
+	}
+	ROS_INFO("We have no more stacks left to write!");
 
-        if (stacksavedescription.empty()) {
-            stacksavedescription = stackBeingWritten->saveDescription();
-        }
-        stackBeingWritten->toDisk(*outfile);
-        currentFileSize = outfile->tellp();
-        delete stackBeingWritten;
-        stackBeingWritten = NULL;    
-        return true;          
-    }
-   return false;
+	return true;
+
 }
     
 
 ofstream::pos_type ThreadedLinearStackCompressor::numBytesWritten() {
 
-    return currentFileSize;
+    return currentFileSize_;
 }
 
 
@@ -379,15 +373,61 @@ string ThreadedLinearStackCompressor::saveDescription() {
 }
 
 void ThreadedLinearStackCompressor::startThreads() {
-	mergeCompressedStacksActive_ = true;
+	mergeCompressedStacksThreadActive_ = true;
 	mergeCompressedStacksThread_ = 	std::thread(&ThreadedLinearStackCompressor::mergeCompressedStacksThreadFcn, this);
+	writeThreadActive_ = true ;
+	writeThread_ = std::thread(&ThreadedLinearStackCompressor::writeThreadFcn, this);
 
 }
 
+void ThreadedLinearStackCompressor::writeThreadFcn() {
+	ROS_INFO("We start out writing thread");
+	while (writeThreadActive_) {
+
+		setWritingStack();
+
+		if (stacksLeftToWrite_) {
+			savingStacks_ = true;
+			ROS_INFO("Writing stack!");
+			stackBeingWrittenMutex_.lock();
+			if (stacksavedescription.empty()) {
+				//			                writingThreadTimer.tic("creating save description");
+				stacksavedescription = stackBeingWritten->saveDescription();
+				//			                writingThreadTimer.toc("creating save description");
+				ROS_INFO("created save description");
+			}
+
+			outfileMutex_.lock();
+            if (outfile == NULL) {
+            	ROS_INFO("We open the file!");
+            	openOutputFile();
+            }
+            if (outfile == NULL) {
+                ROS_ERROR("error opening output file");
+
+            }
+
+            stackBeingWritten->toDisk(*outfile);
+            currentFileSize_ = outfile->tellp();
+            ROS_INFO("We wrote to the disk");
+            outfileMutex_.unlock();
+
+            delete stackBeingWritten;
+            stackBeingWritten= NULL;
+            stackBeingWrittenMutex_.unlock();
+            savingStacks_ = false;
+		} else {
+			std::this_thread::sleep_for(std::chrono::milliseconds(100));
+		}
+
+	}
+
+	ROS_INFO("We exit our writing thread");
+}
 
 void ThreadedLinearStackCompressor::mergeCompressedStacksThreadFcn() {
 
-	while (mergeCompressedStacksActive_) {
+	while (mergeCompressedStacksThreadActive_) {
 
 		setCompressionStack();
 		compressedStacksMutex_.lock();
@@ -463,10 +503,14 @@ void ThreadedLinearStackCompressor::mergeCompressedStacks() {
 
 
 void ThreadedLinearStackCompressor::setWritingStack() {
+     std::lock_guard<std::mutex> lock(stacksToWriteMutex_);
+     std::lock_guard<std::mutex> lock2(stackBeingWrittenMutex_);
      
     if (stackBeingWritten == NULL && !stacksToWrite.empty()) {
         stackBeingWritten = stacksToWrite.front();
         stacksToWrite.pop();
     }
     
+    stacksLeftToWrite_ = (stackBeingWritten != NULL);
+
 }
